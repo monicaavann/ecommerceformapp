@@ -1,7 +1,6 @@
 import os
 import psycopg2
 import psycopg2.extras
-from google.colab import userdata
 
 def get_db_url():
     # Cloud concept: Configuration outside code (Secrets)
