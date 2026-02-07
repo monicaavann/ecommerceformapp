@@ -28,15 +28,16 @@ customer_id_re = re.compile(r"^C\d{4}$")
 default_ship_date = date.today() + timedelta(days=2)
 
 with st.form("order_form", clear_on_submit=False):
-    customer_id = st.text_input("Customer ID", placeholder="e.g., C1234")
-    ship_date = st.date_input("Ship Date", value=default_ship_date, min_value=date.today())
-    status = st.selectbox("Status", ["shipped", "paid", "refunded", "delivered", "cancelled", "pending", "unknown"])
-    channel = st.selectbox("Channel", ["social", "partner", "web", "app", "mobile_app", "walkin"])
+    customer_id = st.text_input("Customer ID", placeholder="e.g., C1234", key="customer_id")
+    ship_date = st.date_input("Ship Date", value=default_ship_date, min_value=date.today(), key="ship_date")
+    status = st.selectbox("Status", ["shipped", "paid", "refunded", "delivered", "cancelled", "pending", "unknown"], key="status")
+    channel = st.selectbox("Channel", ["social", "partner", "web", "app", "mobile_app", "walkin"], key="channel")
     total_amount_usd = st.number_input(
         "Total Amount (USD)",
         min_value=-5000.0,  # can input negatives but warning issues if status is not refunded
         max_value=5000.0,
-        value=0.0
+        value=0.0,
+        key="total_amount_usd"
     )
     discount_pct = st.number_input(
         "Discount",
@@ -44,76 +45,83 @@ with st.form("order_form", clear_on_submit=False):
         max_value=1.0,
         value=0.0,
         step=0.01,
-        help="Enter 0.10 for 10% discount"
+        help="Enter 0.10 for 10% discount",
+        key="discount_pct"
     )
-    payment_method = st.selectbox("Payment Method", ["bank_transfer", "credit_card", "e-wallet", "cash"])
-    region = st.selectbox("Region", ["kandal", "takeo", "phnom_penh", "siem_reap", "preah_sihanouk", "battambang", "kampong_cham"])
-    note = st.text_area("Notes", placeholder="Please input order description here")
+    payment_method = st.selectbox("Payment Method", ["bank_transfer", "credit_card", "e-wallet", "cash"], key="payment_method")
+    region = st.selectbox("Region", ["kandal", "takeo", "phnom_penh", "siem_reap", "preah_sihanouk", "battambang", "kampong_cham"], key="region")
+    note = st.text_area("Notes", placeholder="Please input order description here", key="note")
     submitted = st.form_submit_button("Save to Database")
 
 if submitted:
     customer_clean = customer_id.strip()
     order_date = date.today()
 
+    valid = True
     # --- Validations ---
     if not customer_clean:
         st.error("Customer ID is required.")
+        valid = False
     elif not customer_id_re.match(customer_clean):
         st.error("Please enter a valid customer ID. Should be something like C1234.")
+        valid = False
     elif ship_date < order_date:
         st.error("Ship date cannot be before today (order date).")
+        valid = False
     if ship_date == order_date:
         st.warning("⚠️ Ship date is today. Please check if that is intended")
     elif ship_date > order_date + timedelta(days=7):
         st.warning("⚠️ Ship date is more than 7 days from today. Please check if that is intended.")
     elif status != "refunded" and total_amount_usd < 0:
         st.error("Total amount cannot be negative unless the status is 'refunded'.")
+        valid = False
     elif total_amount_usd == 0:
         st.error("Total amount cannot be zero.")
+        valid = False
     elif not (0.0 <= discount_pct <= 1.0):
         st.error("Discount must be between 0 and 1 (e.g., 0.10 for 10%).")
-    else:
-        # --- Duplicate check including order_date ---
-        existing_orders = fetch_latest(1000)
-        df_existing = pd.DataFrame(existing_orders)
+        valid = False
+    
+    # --- Duplicate check ---
+    existing_orders = fetch_latest(1000)
+    df_existing = pd.DataFrame(existing_orders)
 
-        duplicates = df_existing[
-            (df_existing["customer_id"] == customer_clean) &
-            (pd.to_datetime(df_existing["ship_date"]).dt.date == ship_date) &
-            (df_existing["status"].str.lower() == status.lower()) &
-            (pd.to_datetime(df_existing["order_date"]).dt.date == order_date)
-        ]
+    duplicates = df_existing[
+        (df_existing["customer_id"] == customer_clean) &
+        (pd.to_datetime(df_existing["ship_date"]).dt.date == ship_date) &
+        (df_existing["status"].str.lower() == status.lower()) &
+        (pd.to_datetime(df_existing["order_date"]).dt.date == order_date)
+    ]
 
-        if not duplicates.empty:
-            st.warning("⚠️ This order seems to already exist in the system (same customer, order date, ship date, and status). Please check if this is intended.")
-            st.dataframe(duplicates, use_container_width=True)
+    if not duplicates.empty:
+        st.warning("⚠️ This order seems to already exist in the system (same customer, order date, ship date, and status). Please check if this is intended.")
+        st.dataframe(duplicates, use_container_width=True)
 
-        
+    if valid:
         new_id = insert_order(
-            customer_id=customer_clean,
-            ship_date=ship_date,
-            status=status.lower().strip(),
-            channel=channel.lower().strip(),
-            total_amount_usd=total_amount_usd,
-            discount_pct=discount_pct,
-            payment_method=payment_method.lower().strip(),
-            region=region.lower().strip(),
-            note=note.strip() if note else None
-          )
-        
-        if new_id:
-           st.success(f"✅ Saved to Postgres (id={new_id})")
+          customer_id=customer_clean,
+          ship_date=ship_date,
+          status=status.lower().strip(),
+          channel=channel.lower().strip(),
+          total_amount_usd=total_amount_usd,
+          discount_pct=discount_pct,
+          payment_method=payment_method.lower().strip(),
+          region=region.lower().strip(),
+          note=note.strip() if note else None
+        )
 
-           # Clear the form fields
-           st.session_state.customer_id = ""
-           st.session_state.ship_date = date.today() + timedelta(days=2)
-           st.session_state.status = "shipped"
-           st.session_state.channel = "social"
-           st.session_state.total_amount_usd = 0.0
-           st.session_state.discount_pct = 0.0
-           st.session_state.payment_method = "bank_transfer"
-           st.session_state.region = "kandal"
-           st.session_state.note = ""
+        st.success(f"✅ Saved to Postgres (id={new_id})")
+
+        # Clear the form fields
+        st.session_state.customer_id = ""
+        st.session_state.ship_date = date.today() + timedelta(days=2)
+        st.session_state.status = "shipped"
+        st.session_state.channel = "social"
+        st.session_state.total_amount_usd = 0.0
+        st.session_state.discount_pct = 0.0
+        st.session_state.payment_method = "bank_transfer"
+        st.session_state.region = "kandal"
+        st.session_state.note = ""
 
 
 st.divider()
