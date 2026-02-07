@@ -27,7 +27,7 @@ customer_id_re = re.compile(r"^C\d{4}$")
 # Default ship date = 2 days from today
 default_ship_date = date.today() + timedelta(days=2)
 
-with st.form("order_form", clear_on_submit=True):
+with st.form("order_form", clear_on_submit=False):
     customer_id = st.text_input("Customer ID", placeholder="e.g., C1234")
     ship_date = st.date_input("Ship Date", value=default_ship_date, min_value=date.today())
     status = st.selectbox("Status", ["shipped", "paid", "refunded", "delivered", "cancelled", "pending", "unknown"])
@@ -35,7 +35,8 @@ with st.form("order_form", clear_on_submit=True):
     total_amount_usd = st.number_input(
         "Total Amount (USD)",
         min_value=-5000.0,  # can input negatives but warning issues if status is not refunded
-        max_value=5000.0
+        max_value=5000.0,
+        value=0.0
     )
     discount_pct = st.number_input(
         "Discount",
@@ -99,7 +100,20 @@ if submitted:
             region=region.lower().strip(),
             note=note.strip() if note else None
           )
-        st.success(f"✅ Saved to Postgres (id={new_id})")
+        
+        if new_id:
+           st.success(f"✅ Saved to Postgres (id={new_id})")
+
+           # Clear the form fields
+           st.session_state.customer_id = ""
+           st.session_state.ship_date = date.today() + timedelta(days=2)
+           st.session_state.status = "shipped"
+           st.session_state.channel = "social"
+           st.session_state.total_amount_usd = 0.0
+           st.session_state.discount_pct = 0.0
+           st.session_state.payment_method = "bank_transfer"
+           st.session_state.region = "kandal"
+           st.session_state.note = ""
 
 
 st.divider()
