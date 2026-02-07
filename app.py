@@ -8,7 +8,7 @@ from db import get_conn, init_db, insert_order, fetch_latest
 
 st.set_page_config(page_title="E-commerce Orders Form", page_icon="🧾", layout="centered")
 
-init_db()
+# Initialize DB
 
 # Cloud concept: Idempotency - safe to run multiple times
 try:
@@ -18,6 +18,7 @@ except Exception as e:
     st.exception(e)
     st.stop()
 
+init_db()
 
 st.title("🧾 E-commerce Orders Form")
 st.caption("Submit the form. Data is saved to Postgres and shown below.")
@@ -27,46 +28,55 @@ customer_id_re = re.compile(r"^C\d{4}$")
 # Default ship date = 2 days from today
 default_ship_date = date.today() + timedelta(days=2)
 
+# --- Initialize session state defaults ---
+for key, default in {
+    "customer_id": "",
+    "ship_date": default_ship_date,
+    "status": "shipped",
+    "channel": "social",
+    "total_amount_usd": 0.0,
+    "discount_pct": 0.0,
+    "payment_method": "bank_transfer",
+    "region": "kandal",
+    "note": ""
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+# --- Form ---
 with st.form("order_form", clear_on_submit=False):
     customer_id = st.text_input("Customer ID", placeholder="e.g., C1234", key="customer_id")
-    ship_date = st.date_input("Ship Date", value=default_ship_date, min_value=date.today(), key="ship_date")
-    status = st.selectbox(
-        "Status", ["shipped", "paid", "refunded", "delivered", "cancelled", "pending", "unknown"], key="status"
-    )
-    channel = st.selectbox(
-        "Channel", ["social", "partner", "web", "app", "mobile_app", "walkin"], key="channel"
-    )
+    ship_date = st.date_input("Ship Date", value=st.session_state.ship_date, min_value=date.today(), key="ship_date")
+    status = st.selectbox("Status", ["shipped", "paid", "refunded", "delivered", "cancelled", "pending", "unknown"], key="status")
+    channel = st.selectbox("Channel", ["social", "partner", "web", "app", "mobile_app", "walkin"], key="channel")
     total_amount_usd = st.number_input(
         "Total Amount (USD)",
         min_value=-5000.0,
         max_value=5000.0,
-        value=0.0,
+        value=st.session_state.total_amount_usd,
         key="total_amount_usd"
     )
     discount_pct = st.number_input(
         "Discount",
         min_value=0.0,
         max_value=1.0,
-        value=0.0,
+        value=st.session_state.discount_pct,
         step=0.01,
         help="Enter 0.10 for 10% discount",
         key="discount_pct"
     )
-    payment_method = st.selectbox(
-        "Payment Method", ["bank_transfer", "credit_card", "e-wallet", "cash"], key="payment_method"
-    )
-    region = st.selectbox(
-        "Region",
-        ["kandal", "takeo", "phnom_penh", "siem_reap", "preah_sihanouk", "battambang", "kampong_cham"],
-        key="region"
-    )
+    payment_method = st.selectbox("Payment Method", ["bank_transfer", "credit_card", "e-wallet", "cash"], key="payment_method")
+    region = st.selectbox("Region", ["kandal", "takeo", "phnom_penh", "siem_reap", "preah_sihanouk", "battambang", "kampong_cham"], key="region")
     note = st.text_area("Notes", placeholder="Please input order description here", key="note")
     submitted = st.form_submit_button("Save to Database")
 
+# --- Form submission ---
 if submitted:
     customer_clean = customer_id.strip()
     order_date = date.today()
+
     valid = True
+    warnings_exist = False
 
     # --- Validations ---
     if not customer_clean:
@@ -78,11 +88,10 @@ if submitted:
     elif ship_date < order_date:
         st.error("Ship date cannot be before today (order date).")
         valid = False
-
-    if ship_date == order_date:
-        st.warning("⚠️ Ship date is today. Please check if that is intended")
-    elif ship_date > order_date + timedelta(days=7):
-        st.warning("⚠️ Ship date is more than 7 days from today. Please check if that is intended.")
+    # elif ship_date == order_date:
+    #     st.warning("⚠️ Ship date is today. Please check if that is intended")
+    # elif ship_date > order_date + timedelta(days=7):
+    #     st.warning("⚠️ Ship date is more than 7 days from today. Please check if that is intended.")
     elif status != "refunded" and total_amount_usd < 0:
         st.error("Total amount cannot be negative unless the status is 'refunded'.")
         valid = False
@@ -94,21 +103,21 @@ if submitted:
         valid = False
 
     # --- Duplicate check ---
-    existing_orders = fetch_latest(1000)
-    df_existing = pd.DataFrame(existing_orders)
+    # existing_orders = fetch_latest(1000)
+    # df_existing = pd.DataFrame(existing_orders)
 
-    duplicates = df_existing[
-        (df_existing["customer_id"] == customer_clean) &
-        (pd.to_datetime(df_existing["ship_date"]).dt.date == ship_date) &
-        (df_existing["status"].str.lower() == status.lower()) &
-        (pd.to_datetime(df_existing["order_date"]).dt.date == order_date)
-    ]
+    # duplicates = df_existing[
+    #     (df_existing["customer_id"] == customer_clean) &
+    #     (pd.to_datetime(df_existing["ship_date"]).dt.date == ship_date) &
+    #     (df_existing["status"].str.lower() == status.lower()) &
+    #     (pd.to_datetime(df_existing["order_date"]).dt.date == order_date)
+    # ]
 
-    if not duplicates.empty:
-        st.warning("⚠️ This order seems to already exist in the system (same customer, order date, ship date, and status).")
-        st.dataframe(duplicates, use_container_width=True)
+    # if not duplicates.empty:
+    #     st.warning("⚠️ This order seems to already exist in the system (same customer, order date, ship date, and status). Please check if this is intended.")
+    #     st.dataframe(duplicates, use_container_width=True)
 
-    # --- Insert order if validations passed ---
+    # --- Insert if valid ---
     if valid:
         new_id = insert_order(
             customer_id=customer_clean,
@@ -125,7 +134,7 @@ if submitted:
         st.success(f"✅ Saved to Postgres (id={new_id})")
 
         # --- Clear the form fields safely ---
-        default_values = {
+        defaults = {
             "customer_id": "",
             "ship_date": date.today() + timedelta(days=2),
             "status": "shipped",
@@ -136,9 +145,10 @@ if submitted:
             "region": "kandal",
             "note": ""
         }
-        for key, val in default_values.items():
+        for key, val in defaults.items():
             st.session_state[key] = val
 
+# --- Display latest orders ---
 st.divider()
 st.subheader("📄 Latest Orders")
 
