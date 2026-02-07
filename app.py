@@ -73,6 +73,9 @@ if submitted:
     elif status != "refunded" and total_amount_usd < 0:
         st.error("Total amount cannot be negative unless the status is 'refunded'.")
         valid = False
+    elif status == "refunded" and total_amount_usd > 0:
+        st.error("Total amount must be negative for status 'refunded'.")
+        valid = False
     elif total_amount_usd == 0:
         st.error("Total amount cannot be zero.")
         valid = False
