@@ -1,6 +1,7 @@
 import os
 import psycopg2
 import psycopg2.extras
+from datetime import date
 
 def get_db_url():
     # Cloud concept: Configuration outside code (Secrets)
