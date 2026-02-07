@@ -61,7 +61,7 @@ def init_db():
             cur.execute(CREATE_TABLE_SQL)
         conn.commit()
 
-def insert_order(customer_id: str, ship_date: str, status: str, channel: str, total_amount_usd: float, discount_pct: float, payment_method: str, region: str, note: str = None) -> int:
+def insert_order(customer_id: str, ship_date: date, status: str, channel: str, total_amount_usd: float, discount_pct: float, payment_method: str, region: str, note: str = None) -> int:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(INSERT_SQL, (customer_id, ship_date, status, channel, total_amount_usd, discount_pct, payment_method, region, note))

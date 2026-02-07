@@ -8,7 +8,7 @@ from db import get_conn, init_db, insert_order, fetch_latest
 
 st.set_page_config(page_title="E-commerce Orders Form", page_icon="🧾", layout="centered")
 
-get_conn()
+init_db()
 
 # Cloud concept: Idempotency - safe to run multiple times
 try:
@@ -18,7 +18,6 @@ except Exception as e:
     st.exception(e)
     st.stop()
 
-init_db()
 
 st.title("🧾 E-commerce Orders Form")
 st.caption("Submit the form. Data is saved to Postgres and shown below.")
@@ -84,25 +83,23 @@ if submitted:
             (pd.to_datetime(df_existing["order_date"]).dt.date == order_date)
         ]
 
-        insert_allowed = True
         if not duplicates.empty:
-            st.warning("⚠️ This order seems to already exist in the system (same customer, order date, ship date, and status).")
+            st.warning("⚠️ This order seems to already exist in the system (same customer, order date, ship date, and status). Please check if this is intended.")
             st.dataframe(duplicates, use_container_width=True)
-            insert_allowed = st.checkbox("Yes, I still want to insert this order")
 
-        if insert_allowed:
-            new_id = insert_order(
-                customer_id=customer_clean,
-                ship_date=ship_date,
-                status=status.lower().strip(),
-                channel=channel.lower().strip(),
-                total_amount_usd=total_amount_usd,
-                discount_pct=discount_pct,
-                payment_method=payment_method.lower().strip(),
-                region=region.lower().strip(),
-                note=note.strip() if note else None
-            )
-            st.success(f"✅ Saved to Postgres (id={new_id})")
+        
+        new_id = insert_order(
+            customer_id=customer_clean,
+            ship_date=ship_date,
+            status=status.lower().strip(),
+            channel=channel.lower().strip(),
+            total_amount_usd=total_amount_usd,
+            discount_pct=discount_pct,
+            payment_method=payment_method.lower().strip(),
+            region=region.lower().strip(),
+            note=note.strip() if note else None
+          )
+        st.success(f"✅ Saved to Postgres (id={new_id})")
 
 
 st.divider()
