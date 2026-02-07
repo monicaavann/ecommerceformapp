@@ -44,7 +44,7 @@ RETURNING id;
 """
 
 SELECT_LATEST_SQL = """
-SELECT id, customer_id, ship_date, status, channel, total_amount_usd, discount_pct, payment_method, region, note
+SELECT id, customer_id, order_date, ship_date, status, channel, total_amount_usd, discount_pct, payment_method, region, note
 FROM ecommerceorders
 ORDER BY id DESC
 LIMIT %s;
