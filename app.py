@@ -31,7 +31,7 @@ default_ship_date = date.today() + timedelta(days=2)
 # --- Form ---
 with st.form("order_form", clear_on_submit=True):
     customer_id = st.text_input("Customer ID", placeholder="e.g., C1234")
-    ship_date = st.date_input("Ship Date", value=st.session_state.ship_date, min_value=date.today())
+    ship_date = st.date_input("Ship Date", value=default_ship_date, min_value=date.today())
     status = st.selectbox("Status", ["shipped", "paid", "refunded", "delivered", "cancelled", "pending", "unknown"])
     channel = st.selectbox("Channel", ["social", "partner", "web", "app", "mobile_app", "walkin"])
     total_amount_usd = st.number_input(
